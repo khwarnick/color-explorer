@@ -1,10 +1,8 @@
+# color-explorer
+Svelte app using Three.js to explore color palette selection in HSL color spaces with luminance
 # sv
 
 Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
-
-## Creating a project
-
-If you're seeing this, you've probably already done this step. Congrats!
 
 ```bash
 # create a new project in the current directory
