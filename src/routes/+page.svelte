@@ -5,8 +5,10 @@
   import ColorRelaxation from '$lib/components/ColorRelaxation.svelte';
   import ColorSaveLoad from '$lib/components/ColorSaveLoad.svelte';
   import ColorGeneration from '$lib/components/ColorGeneration.svelte';
+  import ColorGradients from '$lib/components/ColorGradients.svelte';
   import { writable } from 'svelte/store';
   import type { Color } from '$lib/types';
+  import { createColor } from '$lib/utils/color';
 
   // Store for HSL tab colors
   const hslColors = writable<Color[]>([]);
@@ -17,6 +19,14 @@
   const oklabColors = writable<Color[]>([]);
   const oklabActiveColor = writable<Color | null>(null);
   const oklabLockedColors = writable<Set<number>>(new Set());
+  const oklabStartColor = writable<Color | null>(createColor(0, 100, 50));  // Initialize to red
+  const oklabEndColor = writable<Color | null>(createColor(240, 100, 50));  // Initialize to blue
+  const oklabActiveGradientColor = writable<'start' | 'end' | null>(null);  // Track which gradient color is active
+
+  // Stores for gradient visualization
+  const hslGradientColors = writable<Color[]>([]);
+  const evenLumGradientColors = writable<Color[]>([]);
+  const oklabGradientColors = writable<Color[]>([]);
 
   // Computed stores based on active tab
   $: colors = activeTab === 'hsl' ? hslColors : oklabColors;
@@ -55,6 +65,35 @@
   function handleRelaxStart(event: CustomEvent) {
     startRelaxing = event.detail.start;
     stopRelaxing = event.detail.stop;
+  }
+
+  function handleGradientColorSelected(event: CustomEvent) {
+    const color = event.detail.color;
+    if (color === $oklabStartColor) {
+      oklabActiveGradientColor.set('start');
+    } else if (color === $oklabEndColor) {
+      oklabActiveGradientColor.set('end');
+    }
+    oklabActiveColor.set(color);
+  }
+
+  // Update gradient colors when color picker changes active color
+  $: if ($oklabActiveColor && $oklabActiveGradientColor) {
+    if ($oklabActiveGradientColor === 'start') {
+      oklabStartColor.set($oklabActiveColor);
+    } else if ($oklabActiveGradientColor === 'end') {
+      oklabEndColor.set($oklabActiveColor);
+    }
+  }
+
+  // Update colors array for color picker to show gradient colors
+  $: if (activeTab === 'oklab') {
+    oklabColors.set([$oklabStartColor, $oklabEndColor].filter((c): c is Color => c !== null));
+  }
+
+  // Clear active gradient color when switching tabs
+  $: if (activeTab !== 'oklab') {
+    oklabActiveGradientColor.set(null);
   }
 </script>
 
@@ -107,16 +146,23 @@
             activeColor={oklabActiveColor} 
             lockedColors={oklabLockedColors}
             showEqualLuminancePlot={false}
+            hslGradientColors={$hslGradientColors}
+            evenLumGradientColors={$evenLumGradientColors}
+            oklabGradientColors={$oklabGradientColors}
           />
         </div>
         <div class="controls">
           <div class="control-panels-stack">
             <div class="control-panel">
-              <!-- Oklab comparison controls will go here -->
-              <div class="placeholder">
-                <h2>Coming soon: Oklab gradient comparison tools</h2>
-                <p>This tab will allow you to compare HSL and Oklab color interpolation methods.</p>
-              </div>
+              <ColorGradients 
+                startColor={$oklabStartColor}
+                endColor={$oklabEndColor}
+                activeColor={$oklabActiveColor}
+                on:colorSelected={handleGradientColorSelected}
+                bind:hslGradientColors={$hslGradientColors}
+                bind:evenLumGradientColors={$evenLumGradientColors}
+                bind:oklabGradientColors={$oklabGradientColors}
+              />
             </div>
             <div class="control-panel">
               <ColorPicker activeColor={oklabActiveColor} colors={oklabColors} />
@@ -149,10 +195,9 @@
   .scrollable-content {
     flex: 1;
     min-height: 0;
-    overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    overflow: hidden; /* Disable main page scrolling */
   }
 
   .tabs {
@@ -182,17 +227,16 @@
   }
 
   .content {
-    flex: 0 0 auto;
+    flex: 1;
     display: flex;
     gap: 1rem;
     min-height: 0;
-    height: 600px; /* Add fixed height to ensure consistency */
   }
 
   .color-space {
     flex: 1;
     min-width: 0;
-    height: 600px;
+    height: 800px; /* Reduced height for color space */
     background: #f0f0f0;
     border-radius: 8px;
     display: flex;
@@ -205,8 +249,8 @@
     width: 600px;
     min-width: 0;
     flex-shrink: 0;
-    max-height: 600px;
-    overflow-y: auto;
+    overflow-y: auto; /* Keep scrolling for right panel */
+    max-height: 800px; /* Match color space height */
   }
 
   .control-panels-stack {

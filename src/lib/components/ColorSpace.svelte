@@ -14,6 +14,9 @@
     export let activeColor: any;  // Svelte store
     export let lockedColors: any;  // Add this line
     export let showEqualLuminancePlot: boolean = true;  // New prop with default value
+    export let hslGradientColors: Color[] = [];  // Add gradient colors
+    export let evenLumGradientColors: Color[] = [];
+    export let oklabGradientColors: Color[] = [];
 
     const colorSpaceMode = writable<'saturation' | 'chroma'>('saturation');
     let showEqualLuminance = false;
@@ -422,6 +425,39 @@
         return sprite;
     }
 
+    function createGradientPoint(color: Color, position: THREE.Vector3, shape: 'sphere' | 'box' | 'cone'): THREE.Mesh {
+        let geometry;
+        
+        switch (shape) {
+            case 'sphere':
+                geometry = new THREE.SphereGeometry(0.02, 16, 16);
+                break;
+            case 'box':
+                geometry = new THREE.BoxGeometry(0.03, 0.03, 0.03);
+                break;
+            case 'cone':
+                geometry = new THREE.ConeGeometry(0.02, 0.04, 8);
+                break;
+        }
+
+        const material = new THREE.MeshBasicMaterial({
+            color: new THREE.Color(
+                color.rgb.r / 255,
+                color.rgb.g / 255,
+                color.rgb.b / 255
+            )
+        });
+
+        const point = new THREE.Mesh(geometry, material);
+        point.position.copy(position);
+        
+        if (shape === 'cone') {
+            point.rotation.x = Math.PI;  // Point the cone downward
+        }
+        
+        return point;
+    }
+
     function createHSLSamplingPoints() {
         // Remove existing points
         equalLuminancePoints.forEach(point => scene.remove(point));
@@ -546,13 +582,17 @@
             activePoint = null;
         }
 
-        // Remove and dispose of existing lines and lock indicators
+        // Remove and dispose of existing lines, lock indicators, and gradient points
         scene.children
             .filter(child => 
                 child.name === 'connectionLine' || 
-                child.name === 'lockIndicator'
+                child.name === 'lockIndicator' ||
+                child.name === 'gradientPoint'
             )
             .forEach(obj => {
+                if (obj instanceof THREE.Mesh && obj.material instanceof THREE.Material) {
+                    obj.material.dispose();
+                }
                 if (obj instanceof THREE.Sprite) {
                     const material = obj.material as THREE.SpriteMaterial;
                     if (material.map) {
@@ -566,7 +606,7 @@
                 scene.remove(obj);
             });
 
-        // Create all points first
+        // Create regular color points
         for (let i = 0; i < $colors.length; i++) {
             const color = $colors[i];
             const position = colorToPosition(color, $colorSpaceMode);
@@ -598,6 +638,28 @@
                 scene.add(activePoint);
             }
         }
+
+        // Add gradient points with different shapes
+        hslGradientColors.forEach(color => {
+            const position = colorToPosition(color, $colorSpaceMode);
+            const point = createGradientPoint(color, position, 'sphere');
+            point.name = 'gradientPoint';
+            scene.add(point);
+        });
+
+        evenLumGradientColors.forEach(color => {
+            const position = colorToPosition(color, $colorSpaceMode);
+            const point = createGradientPoint(color, position, 'box');
+            point.name = 'gradientPoint';
+            scene.add(point);
+        });
+
+        oklabGradientColors.forEach(color => {
+            const position = colorToPosition(color, $colorSpaceMode);
+            const point = createGradientPoint(color, position, 'cone');
+            point.name = 'gradientPoint';
+            scene.add(point);
+        });
 
         // Get spring connections and create lines
         let connections: SpringConnection[] = [];
@@ -649,6 +711,11 @@
 
     // Update points when locked colors change
     $: if (scene && $lockedColors) {
+        updateColorPoints();
+    }
+
+    // Update when gradient colors change
+    $: if (scene && (hslGradientColors.length > 0 || evenLumGradientColors.length > 0 || oklabGradientColors.length > 0)) {
         updateColorPoints();
     }
 
