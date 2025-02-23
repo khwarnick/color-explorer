@@ -139,17 +139,13 @@ export function createSpringSystem() {
 
             const connectedIndices = getConnectedIndices(i);
             const color = colors[i];
-            let totalForceH = 0;
             let totalForceS = 0;
             let totalForceLuminance = 0;
 
             // Sum up forces from all connected colors
             for (const connectedIndex of connectedIndices) {
                 const connectedColor = colors[connectedIndex];
-                totalForceH += calculateSpringForce(color.h, connectedColor.h);
                 totalForceS += (connectedColor.s - color.s) * getSpringConstant();
-                
-                // Calculate force based on luminance difference
                 totalForceLuminance += (connectedColor.luminance - color.luminance) * getSpringConstant();
             }
 
@@ -157,7 +153,7 @@ export function createSpringSystem() {
             const lightnessForce = estimateLightnessChange(color, color.luminance + totalForceLuminance);
 
             forces.set(i, {
-                h: totalForceH,
+                h: 0, // No hue forces
                 s: totalForceS,
                 l: lightnessForce
             });
@@ -173,20 +169,17 @@ export function createSpringSystem() {
             const force = forces.get(i) || { h: 0, s: 0, l: 0 };
             const vel = velocities.get(i)!;
 
-            // Update velocity with damping
-            vel.h = (vel.h + force.h * timestep) * (1 - damping);
+            // Update velocity with damping (no hue velocity)
+            vel.h = 0;  // No hue changes
             vel.s = (vel.s + force.s * timestep) * (1 - damping);
             vel.l = (vel.l + force.l * timestep) * (1 - damping);
 
-            // Update position
+            // Update position (keeping hue constant)
             const color = colors[i];
-            let newH = (color.h + vel.h * timestep) % 360;
-            if (newH < 0) newH += 360;
-            
             const newS = Math.max(0, Math.min(100, color.s + vel.s * timestep));
             const newL = Math.max(0, Math.min(100, color.l + vel.l * timestep));
 
-            newColors[i] = createColor(newH, newS, newL);
+            newColors[i] = createColor(color.h, newS, newL);
         }
 
         return newColors;

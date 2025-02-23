@@ -42,65 +42,73 @@
 </script>
 
 <div class="color-picker">
-    {#if $activeColor}
-        <div class="picker-content">
-            <div class="left-panel">
-                <div class="preview-section">
+    <div class="picker-content">
+        <div class="left-panel">
+            <div class="preview-section">
+                {#if $activeColor}
                     <div 
                         class="color-preview"
                         style="background-color: rgb({$activeColor.rgb.r}, {$activeColor.rgb.g}, {$activeColor.rgb.b})"
-                    ></div>
-                    <div class="info">
-                        <div>RGB: ({Math.round($activeColor.rgb.r)}, {Math.round($activeColor.rgb.g)}, {Math.round($activeColor.rgb.b)})</div>
-                        <div>Luminance: {$activeColor.luminance.toFixed(3)}</div>
+                    >
+                        <div class="info">
+                            <div>RGB: ({Math.round($activeColor.rgb.r)}, {Math.round($activeColor.rgb.g)}, {Math.round($activeColor.rgb.b)})</div>
+                            <div>HSL: ({Math.round($activeColor.h)}, {Math.round($activeColor.s)}%, {$activeColor.l.toFixed(1)}%)</div>
+                            <div>Luminance: {$activeColor.luminance.toFixed(3)}</div>
+                        </div>
                     </div>
-                </div>
+                {:else}
+                    <div class="color-preview empty">
+                        <div class="empty-message">
+                            Select a color from the grid or 3D graph to edit
+                        </div>
+                    </div>
+                {/if}
+            </div>
+            
+            <div class="sliders" class:disabled={!$activeColor}>
+                <label>
+                    <div class="slider-label">Hue: {Math.round(h)}</div>
+                    <input 
+                        type="range" 
+                        min="0" 
+                        max="360" 
+                        bind:value={h}
+                        on:input={updateColor}
+                        disabled={!$activeColor}
+                    >
+                </label>
                 
-                <div class="sliders">
-                    <label>
-                        <div class="slider-label">Hue: {Math.round(h)}</div>
-                        <input 
-                            type="range" 
-                            min="0" 
-                            max="360" 
-                            bind:value={h}
-                            on:input={updateColor}
-                        >
-                    </label>
-                    
-                    <label>
-                        <div class="slider-label">Saturation: {Math.round(s)}</div>
-                        <input 
-                            type="range" 
-                            min="0" 
-                            max="100" 
-                            bind:value={s}
-                            on:input={updateColor}
-                        >
-                    </label>
-                    
-                    <label>
-                        <div class="slider-label">Lightness: {Math.round(l)}</div>
-                        <input 
-                            type="range" 
-                            min="0" 
-                            max="100" 
-                            bind:value={l}
-                            on:input={updateColor}
-                        >
-                    </label>
-                </div>
+                <label>
+                    <div class="slider-label">Saturation: {Math.round(s)}</div>
+                    <input 
+                        type="range" 
+                        min="0" 
+                        max="100" 
+                        bind:value={s}
+                        on:input={updateColor}
+                        disabled={!$activeColor}
+                    >
+                </label>
+                
+                <label>
+                    <div class="slider-label">Lightness: {l.toFixed(1)}</div>
+                    <input 
+                        type="range" 
+                        min="0" 
+                        max="100" 
+                        step="0.2"
+                        bind:value={l}
+                        on:input={updateColor}
+                        disabled={!$activeColor}
+                    >
+                </label>
             </div>
+        </div>
 
-            <div class="right-panel">
-                <ColorWheel {activeColor} {colors} />
-            </div>
+        <div class="right-panel">
+            <ColorWheel {activeColor} {colors} />
         </div>
-    {:else}
-        <div class="no-selection">
-            Select a color from the grid to edit
-        </div>
-    {/if}
+    </div>
 </div>
 
 <style>
@@ -109,11 +117,14 @@
         padding: 1rem;
         border-radius: 8px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        width: 100%;
+        box-sizing: border-box;
     }
 
     .picker-content {
         display: flex;
         gap: 1.5rem;
+        height: 220px;
     }
 
     .left-panel {
@@ -125,9 +136,8 @@
     }
 
     .preview-section {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
+        flex: 1;
+        min-height: 0;
     }
 
     .right-panel {
@@ -138,21 +148,46 @@
 
     .color-preview {
         width: 100%;
-        height: 100px;
+        height: 100%;
         border-radius: 4px;
         border: 1px solid black;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding: 0.5rem;
+        box-sizing: border-box;
+    }
+
+    .color-preview.empty {
+        background: #f0f0f0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 1rem;
+    }
+
+    .empty-message {
+        color: #666;
+        font-style: italic;
     }
 
     .info {
         font-family: monospace;
         font-size: 0.9rem;
         white-space: nowrap;
+        color: white;
+        text-shadow: 0 0 2px black;
     }
 
     .sliders {
         display: flex;
         flex-direction: column;
         gap: 0.5rem;
+    }
+
+    .sliders.disabled {
+        opacity: 0.5;
     }
 
     label {
@@ -170,9 +205,7 @@
         width: 100%;
     }
 
-    .no-selection {
-        text-align: center;
-        padding: 2rem;
-        color: #666;
+    input[type="range"]:disabled {
+        cursor: not-allowed;
     }
 </style> 

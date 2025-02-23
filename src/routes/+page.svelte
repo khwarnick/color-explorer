@@ -4,6 +4,7 @@
   import ColorPicker from '$lib/components/ColorPicker.svelte';
   import ColorRelaxation from '$lib/components/ColorRelaxation.svelte';
   import ColorSaveLoad from '$lib/components/ColorSaveLoad.svelte';
+  import ColorGeneration from '$lib/components/ColorGeneration.svelte';
   import { writable } from 'svelte/store';
   import type { Color } from '$lib/types';
 
@@ -13,6 +14,28 @@
   const activeColor = writable<Color | null>(null);
   // Store for locked colors
   const lockedColors = writable<Set<number>>(new Set());
+
+  // Store for generator hues
+  let currentHues: number[] | undefined = undefined;
+  // Store for active bar color index
+  let activeBarColorIndex = -1;
+  // Store for luminance values
+  let midLightness: number | undefined = undefined;
+  let highLuminance: number | undefined = undefined;
+  let midLuminance: number | undefined = undefined;
+  let lowLuminance: number | undefined = undefined;
+
+  function handleHuesChanged(event: CustomEvent) {
+    currentHues = event.detail.hues;
+    midLightness = event.detail.midLightness;
+    highLuminance = event.detail.highLuminance;
+    midLuminance = event.detail.midLuminance;
+    lowLuminance = event.detail.lowLuminance;
+  }
+
+  function handleBarColorSelected(event: CustomEvent) {
+    activeBarColorIndex = event.detail.index;
+  }
 
   // Relaxation handlers
   let startRelaxing: () => void;
@@ -32,8 +55,9 @@
     </div>
     <div class="controls">
       <div class="control-panel">
+        <ColorGeneration {colors} {activeColor} on:huesChanged={handleHuesChanged} on:barColorSelected={handleBarColorSelected} />
+        <ColorGrid {colors} {activeColor} {lockedColors} {activeBarColorIndex} generatorHues={currentHues} {midLightness} {highLuminance} {midLuminance} {lowLuminance} on:relaxHandlers={handleRelaxStart} />
         <ColorPicker {activeColor} {colors} />
-        <ColorGrid {colors} {activeColor} {lockedColors} on:relaxHandlers={handleRelaxStart} />
         <ColorRelaxation {startRelaxing} {stopRelaxing} />
         <ColorSaveLoad {colors} />
       </div>
@@ -78,7 +102,7 @@
   .controls {
     display: flex;
     justify-content: flex-end;
-    width: 500px;
+    width: 600px;
     min-width: 0;
     flex-shrink: 0;
   }

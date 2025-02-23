@@ -19,6 +19,7 @@
     let equalLuminancePoints: THREE.Mesh[] = [];
     let samplingMode: 'rgb' | 'hsl' = 'rgb';
     let container: HTMLElement;
+    let wheelCanvas: HTMLCanvasElement;
     let scene: THREE.Scene;
     let camera: THREE.PerspectiveCamera;
     let renderer: THREE.WebGLRenderer;
@@ -91,7 +92,7 @@
 
         // Camera setup
         camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
-        camera.position.set(2, 2, 2);
+        camera.position.set(1.5, 1.5, 1.5);  // Decreased from 2,2,2 to zoom in closer
 
         // Renderer setup
         renderer = new THREE.WebGLRenderer({ 
@@ -152,15 +153,24 @@
         // Update the picking ray with the camera and mouse position
         raycaster.setFromCamera(mouse, camera);
 
-        // Calculate objects intersecting the picking ray
-        const intersects = raycaster.intersectObjects(
-            colorPoints.map(cp => cp.mesh),
-            false
-        );
+        // Test intersections with color points
+        const colorIntersects = raycaster.intersectObjects(colorPoints.map(cp => cp.mesh), true);
+        
+        // Test intersections with active point separately
+        const activeIntersects = activePoint ? raycaster.intersectObject(activePoint, true) : [];
+        
+        // Combine intersections
+        const allIntersects = [...colorIntersects, ...activeIntersects];
 
-        if (intersects.length > 0) {
+        if (allIntersects.length > 0) {
             // Find the color associated with the clicked mesh
-            const clickedPoint = colorPoints.find(cp => cp.mesh === intersects[0].object);
+            const clickedObject = allIntersects[0].object;
+            const clickedPoint = colorPoints.find(cp => 
+                cp.mesh === clickedObject || // Direct mesh match
+                cp.mesh === clickedObject.parent || // Parent match (for active point group)
+                (clickedObject.parent && cp.mesh === clickedObject.parent.parent) // Grandparent match (for sprite in active point)
+            );
+
             if (clickedPoint) {
                 const index = $colors.findIndex((c: Color) => 
                     c.h === clickedPoint.color.h && 
@@ -206,6 +216,9 @@
         });
         const sprite = new THREE.Sprite(spriteMaterial);
         sprite.scale.set(0.15, 0.075, 1);  // Increased sprite scale
+
+        // Store the texture reference so it can be disposed later
+        sprite.userData.texture = texture;
         return sprite;
     }
 
@@ -395,6 +408,9 @@
         const sprite = new THREE.Sprite(material);
         sprite.scale.set(0.1, 0.1, 1);
         sprite.position.copy(position);
+
+        // Store the texture reference so it can be disposed later
+        sprite.userData.texture = texture;
         return sprite;
     }
 
@@ -407,8 +423,8 @@
 
         // Create points for every 2 degrees of hue, 2% saturation, and 2% lightness
         for (let h = 0; h < 360; h += 2) {
-            for (let s = 0; s <= 100; s += 2) {
-                for (let l = 1; l < 100; l += 2) {
+            for (let s = 0; s <= 100; s += 1) {
+                for (let l = 1; l < 100; l += 1) {
                     const color = createColor(h, s, l);
                     // Only show points with luminance close to active color
                     if (Math.abs(color.luminance - $activeColor.luminance) < 0.001) {
@@ -474,38 +490,73 @@
     }
 
     function updateEqualLuminancePoints() {
-        if (showEqualLuminance) {
-            if (samplingMode === 'rgb') {
-                createRGBSamplingPoints();
-            } else {
-                createHSLSamplingPoints();
-            }
-        } else {
+        // Return early if plot is off or no active color
+        if (!showEqualLuminance || !$activeColor) {
             equalLuminancePoints.forEach(point => scene.remove(point));
             equalLuminancePoints = [];
+            return;
+        }
+
+        // Remove existing points
+        equalLuminancePoints.forEach(point => scene.remove(point));
+        equalLuminancePoints = [];
+
+        if (samplingMode === 'rgb') {
+            createRGBSamplingPoints();
+        } else {
+            createHSLSamplingPoints();
         }
     }
 
     function updateColorPoints() {
+        // Dispose of existing materials and textures
+        colorPoints.forEach(cp => {
+            if (cp.mesh.material instanceof THREE.Material) {
+                cp.mesh.material.dispose();
+            }
+        });
+
         // Remove existing points and lines
         colorPoints.forEach(cp => scene.remove(cp.mesh));
         colorPoints = [];
         
         if (activePoint) {
+            // Dispose of materials and textures in the active point group
+            activePoint.children.forEach(child => {
+                if (child instanceof THREE.Mesh && child.material instanceof THREE.Material) {
+                    child.material.dispose();
+                }
+                if (child instanceof THREE.Sprite) {
+                    const material = child.material as THREE.SpriteMaterial;
+                    if (material.map) {
+                        material.map.dispose();
+                    }
+                    material.dispose();
+                }
+            });
             scene.remove(activePoint);
             activePoint = null;
         }
 
-        // Remove existing lines, lock indicators, and equal luminance points
+        // Remove and dispose of existing lines and lock indicators
         scene.children
             .filter(child => 
                 child.name === 'connectionLine' || 
-                child.name === 'lockIndicator' ||
-                child.name === 'equalLuminancePoint'
+                child.name === 'lockIndicator'
             )
-            .forEach(obj => scene.remove(obj));
-        
-        equalLuminancePoints = [];
+            .forEach(obj => {
+                if (obj instanceof THREE.Sprite) {
+                    const material = obj.material as THREE.SpriteMaterial;
+                    if (material.map) {
+                        material.map.dispose();
+                    }
+                    material.dispose();
+                }
+                if (obj instanceof THREE.Line && obj.material instanceof THREE.Material) {
+                    obj.material.dispose();
+                }
+                scene.remove(obj);
+            });
 
         // Create all points first
         for (let i = 0; i < $colors.length; i++) {
@@ -573,6 +624,9 @@
     $: if (scene && $colorSpaceMode) {
         createColorSpace($colorSpaceMode);
         updateColorPoints();
+        if (showEqualLuminance && $activeColor) {
+            updateEqualLuminancePoints();
+        }
     }
 
     // Update points when colors change
@@ -591,8 +645,13 @@
     }
 
     // Update points when sampling mode changes
-    $: if (scene && samplingMode) {
+    $: if (scene && samplingMode && showEqualLuminance && $activeColor) {
         updateEqualLuminancePoints();
+    }
+
+    // Update wheel when equal luminance points change or show state changes
+    $: if (wheelCanvas && showEqualLuminance && $activeColor) {
+        drawColorWheel();
     }
 
     onMount(() => {
@@ -610,7 +669,13 @@
 
     function toggleEqualLuminance() {
         showEqualLuminance = !showEqualLuminance;
-        updateEqualLuminancePoints();
+        if (showEqualLuminance && $activeColor) {
+            updateEqualLuminancePoints();
+            drawColorWheel();
+        } else {
+            equalLuminancePoints.forEach(point => scene.remove(point));
+            equalLuminancePoints = [];
+        }
     }
 
     // Add resize handler to update label positions
@@ -618,6 +683,71 @@
         camera.aspect = container.clientWidth / container.clientHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(container.clientWidth, container.clientHeight);
+    }
+
+    function drawColorWheel() {
+        if (!wheelCanvas || !showEqualLuminance || !$activeColor) return;
+        
+        const ctx = wheelCanvas.getContext('2d')!;
+        const size = wheelCanvas.width;
+        const center = size / 2;
+        const radius = (size / 2) - 4;  // Leave some padding
+        
+        // Clear canvas
+        ctx.clearRect(0, 0, size, size);
+        
+        // Draw background circle
+        ctx.beginPath();
+        ctx.arc(center, center, radius, 0, Math.PI * 2);
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fill();
+        
+        // Draw equal luminance points
+        equalLuminancePoints.forEach(point => {
+            const color = point.material as THREE.MeshBasicMaterial;
+            const position = point.position;
+            
+            // Convert 3D position to 2D angle and radius
+            const angle = Math.atan2(position.z, position.x);
+            const distance = Math.sqrt(position.x * position.x + position.z * position.z);
+            
+            // Calculate point position on canvas
+            const x = center + (radius * distance) * Math.cos(angle);
+            const y = center + (radius * distance) * Math.sin(angle);
+            
+            // Draw point
+            ctx.beginPath();
+            ctx.arc(x, y, 3, 0, Math.PI * 2);
+            ctx.fillStyle = `rgb(${color.color.r * 255}, ${color.color.g * 255}, ${color.color.b * 255})`;
+            ctx.fill();
+        });
+        
+        // If active color exists, draw it larger
+        if ($activeColor) {
+            const activePoint = equalLuminancePoints.find(point => {
+                const material = point.material as THREE.MeshBasicMaterial;
+                return material.color.r === $activeColor.rgb.r / 255 &&
+                       material.color.g === $activeColor.rgb.g / 255 &&
+                       material.color.b === $activeColor.rgb.b / 255;
+            });
+            
+            if (activePoint) {
+                const position = activePoint.position;
+                const angle = Math.atan2(position.z, position.x);
+                const distance = Math.sqrt(position.x * position.x + position.z * position.z);
+                
+                const x = center + (radius * distance) * Math.cos(angle);
+                const y = center + (radius * distance) * Math.sin(angle);
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 6, 0, Math.PI * 2);
+                ctx.fillStyle = `rgb(${$activeColor.rgb.r}, ${$activeColor.rgb.g}, ${$activeColor.rgb.b})`;
+                ctx.fill();
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+        }
     }
 </script>
 
@@ -652,35 +782,49 @@
         <div class="control-panel">
             <h3>Equal Luminance Plot</h3>
             <div class="sampling-controls">
-                <div class="mode-selector">
-                    <label>
-                        <input 
-                            type="radio" 
-                            name="sampling" 
-                            value="rgb"
-                            checked={samplingMode === 'rgb'}
-                            on:change={() => handleSamplingModeChange('rgb')}
-                        >
-                        RGB
-                    </label>
-                    <label>
-                        <input 
-                            type="radio" 
-                            name="sampling" 
-                            value="hsl"
-                            checked={samplingMode === 'hsl'}
-                            on:change={() => handleSamplingModeChange('hsl')}
-                        >
-                        HSL
-                    </label>
+                <div class="sampling-row">
+                    <span class="sampling-label">Sampling method:</span>
+                    <div class="mode-selector">
+                        <label>
+                            <input 
+                                type="radio" 
+                                name="sampling" 
+                                value="rgb"
+                                checked={samplingMode === 'rgb'}
+                                on:change={() => handleSamplingModeChange('rgb')}
+                            >
+                            RGB
+                        </label>
+                        <label>
+                            <input 
+                                type="radio" 
+                                name="sampling" 
+                                value="hsl"
+                                checked={samplingMode === 'hsl'}
+                                on:change={() => handleSamplingModeChange('hsl')}
+                            >
+                            HSL
+                        </label>
+                    </div>
                 </div>
                 <button 
                     class="luminance-toggle"
                     class:active={showEqualLuminance}
+                    disabled={!$activeColor}
                     on:click={toggleEqualLuminance}
                 >
                     Plot Equal Luminance
                 </button>
+                {#if showEqualLuminance}
+                    <div class="wheel-container">
+                        <canvas 
+                            bind:this={wheelCanvas}
+                            width="150"
+                            height="150"
+                            class="color-wheel"
+                        ></canvas>
+                    </div>
+                {/if}
             </div>
         </div>
     </div>
@@ -726,6 +870,17 @@
         gap: 0.5rem;
     }
 
+    .sampling-row {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .sampling-label {
+        white-space: nowrap;
+        color: #333;
+    }
+
     .viewport {
         flex: 1;
         min-height: 0;
@@ -752,17 +907,36 @@
         width: 100%;
     }
 
+    .luminance-toggle:disabled {
+        background: #e0e0e0;
+        color: #999;
+        cursor: not-allowed;
+        border-color: #ddd;
+    }
+
     .luminance-toggle.active {
         background: #4a4a4a;
         color: white;
         border-color: #4a4a4a;
     }
 
-    .luminance-toggle:hover {
+    .luminance-toggle:not(:disabled):hover {
         background: #f0f0f0;
     }
 
-    .luminance-toggle.active:hover {
+    .luminance-toggle.active:not(:disabled):hover {
         background: #5a5a5a;
+    }
+
+    .wheel-container {
+        display: flex;
+        justify-content: center;
+        margin-top: 0.5rem;
+    }
+
+    .color-wheel {
+        border-radius: 50%;
+        border: 1px solid #ccc;
+        background: white;
     }
 </style> 

@@ -49,6 +49,8 @@
                 min="0"
                 max="1"
                 step="0.01"
+                id="spring-constant"
+                name="spring-constant"
             >
         </label>
         
@@ -60,6 +62,8 @@
                 min="0"
                 max="1"
                 step="0.01"
+                id="damping"
+                name="damping"
             >
         </label>
         
@@ -71,6 +75,8 @@
                 min="0.01"
                 max="1"
                 step="0.01"
+                id="timestep"
+                name="timestep"
             >
         </label>
     </div>
