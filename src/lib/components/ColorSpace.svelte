@@ -13,6 +13,7 @@
     export let colors: any;  // Svelte store
     export let activeColor: any;  // Svelte store
     export let lockedColors: any;  // Add this line
+    export let showEqualLuminancePlot: boolean = true;  // New prop with default value
 
     const colorSpaceMode = writable<'saturation' | 'chroma'>('saturation');
     let showEqualLuminance = false;
@@ -91,20 +92,26 @@
         scene.background = new THREE.Color(0xf0f0f0);
 
         // Camera setup
-        camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
-        camera.position.set(1.5, 1.5, 1.5);  // Decreased from 2,2,2 to zoom in closer
+        camera = new THREE.PerspectiveCamera(60, container.clientWidth / container.clientHeight, 0.1, 1000);
+        camera.position.set(2, 2, 2);
+        camera.lookAt(0, 0, 0);
 
         // Renderer setup
         renderer = new THREE.WebGLRenderer({ 
             antialias: true,
             alpha: true 
         });
+        renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(container.clientWidth, container.clientHeight);
         container.appendChild(renderer.domElement);
 
         // Controls setup
         controls = new OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.screenSpacePanning = true;
+        controls.target.set(0, 0, 0);
+        controls.update();
 
         // Initialize raycaster and mouse vector
         raycaster = new THREE.Raycaster();
@@ -120,6 +127,7 @@
 
         // Handle window resize
         const handleResize = () => {
+            if (!container) return;
             camera.aspect = container.clientWidth / container.clientHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(container.clientWidth, container.clientHeight);
@@ -752,39 +760,40 @@
 </script>
 
 <div class="container">
-    <div class="controls">
-        <div class="control-panel">
-            <h3>Color Space</h3>
-            <div class="mode-selector">
-                <label>
-                    <input 
-                        type="radio" 
-                        name="colorspace" 
-                        value="saturation"
-                        checked={$colorSpaceMode === 'saturation'}
-                        on:change={() => handleModeChange('saturation')}
-                    >
-                    HSL (Saturation)
-                </label>
-                <label>
-                    <input 
-                        type="radio" 
-                        name="colorspace" 
-                        value="chroma"
-                        checked={$colorSpaceMode === 'chroma'}
-                        on:change={() => handleModeChange('chroma')}
-                    >
-                    HSL (Chroma)
-                </label>
-            </div>
+    <div class="viewport" bind:this={container}></div>
+    <div class="control-panel control-panel-narrow control-panel-left">
+        <h3>Color Space</h3>
+        <div class="mode-selector mode-selector-vertical">
+            <label>
+                <input 
+                    type="radio" 
+                    name="colorspace" 
+                    value="saturation"
+                    checked={$colorSpaceMode === 'saturation'}
+                    on:change={() => handleModeChange('saturation')}
+                >
+                HSL (Saturation)
+            </label>
+            <label>
+                <input 
+                    type="radio" 
+                    name="colorspace" 
+                    value="chroma"
+                    checked={$colorSpaceMode === 'chroma'}
+                    on:change={() => handleModeChange('chroma')}
+                >
+                HSL (Chroma)
+            </label>
         </div>
+    </div>
 
-        <div class="control-panel">
+    {#if showEqualLuminancePlot}
+        <div class="control-panel control-panel-narrow control-panel-right">
             <h3>Equal Luminance Plot</h3>
             <div class="sampling-controls">
-                <div class="sampling-row">
+                <div class="sampling-section">
                     <span class="sampling-label">Sampling method:</span>
-                    <div class="mode-selector">
+                    <div class="mode-selector mode-selector-vertical">
                         <label>
                             <input 
                                 type="radio" 
@@ -827,8 +836,7 @@
                 {/if}
             </div>
         </div>
-    </div>
-    <div class="viewport" bind:this={container}></div>
+    {/if}
 </div>
 
 <style>
@@ -837,20 +845,47 @@
         height: 100%;
         display: flex;
         flex-direction: column;
+        position: relative;
+        background: #f0f0f0;
+        border-radius: 8px;
+        overflow: hidden;
     }
 
     .controls {
+        position: absolute;
+        top: 0.5rem;
+        left: 0;
+        right: 0;
         display: flex;
-        gap: 1rem;
-        align-items: start;
-        padding: 0.5rem;
+        justify-content: space-between;
+        padding: 0 0.5rem;
+        pointer-events: none;
+        z-index: 1;
     }
 
     .control-panel {
         background: white;
         padding: 0.5rem 1rem;
         border-radius: 4px;
-        flex: 1;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        pointer-events: auto;
+    }
+
+    .control-panel-narrow {
+        width: auto;
+        min-width: 150px;
+    }
+
+    .control-panel-left {
+        position: absolute;
+        top: 0.5rem;
+        left: 0.5rem;
+    }
+
+    .control-panel-right {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
     }
 
     h3 {
@@ -864,26 +899,40 @@
         gap: 1rem;
     }
 
-    .sampling-controls {
-        display: flex;
+    .mode-selector-vertical {
         flex-direction: column;
         gap: 0.5rem;
     }
 
-    .sampling-row {
+    .sampling-controls {
         display: flex;
-        align-items: center;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .sampling-section {
+        display: flex;
+        flex-direction: column;
         gap: 0.5rem;
     }
 
     .sampling-label {
         white-space: nowrap;
         color: #333;
+        font-weight: 500;
     }
 
     .viewport {
-        flex: 1;
-        min-height: 0;
+        width: 100%;
+        height: 100%;
+        position: relative;
+        z-index: 0;
+    }
+
+    .viewport :global(canvas) {
+        width: 100% !important;
+        height: 100% !important;
+        outline: none;
     }
 
     label {
@@ -891,6 +940,7 @@
         align-items: center;
         gap: 0.5rem;
         cursor: pointer;
+        white-space: nowrap;
     }
 
     input[type="radio"] {

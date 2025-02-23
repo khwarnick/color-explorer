@@ -161,3 +161,56 @@ export function findMidLuminanceColor(targetLuminance: number): number {
     }
     return bestLight;
 } 
+
+// Matrix multiplication helper
+function multiplyMatrixVector(matrix: number[][], vector: number[]): number[] {
+    return matrix.map(row => 
+        row.reduce((sum, value, index) => sum + value * vector[index], 0)
+    );
+}
+
+export function oklabMix(color1: Color, color2: Color, t: number): Color {
+    // Convert RGB values to linear space (0-1)
+    const lin1 = [color1.rgb.r / 255, color1.rgb.g / 255, color1.rgb.b / 255];
+    const lin2 = [color2.rgb.r / 255, color2.rgb.g / 255, color2.rgb.b / 255];
+
+    // Matrix constants for cone and LMS conversions
+    const CONE_TO_LMS = [
+        [0.4121656120, 0.2118591070, 0.0883097947],
+        [0.5362752080, 0.6807189584, 0.2818474174],
+        [0.0514575653, 0.1074065790, 0.6302613616]
+    ];
+    const LMS_TO_CONE = [
+        [4.0767245293, -1.2681437731, -0.0041119885],
+        [-3.3072168827, 2.6093323231, -0.7034763098],
+        [0.2307590544, -0.3411344290, 1.7068625689]
+    ];
+
+    // Convert to LMS space
+    const lms1 = multiplyMatrixVector(CONE_TO_LMS, lin1).map(v => Math.pow(Math.max(0, v), 1/3));
+    const lms2 = multiplyMatrixVector(CONE_TO_LMS, lin2).map(v => Math.pow(Math.max(0, v), 1/3));
+
+    // Interpolate in LMS space
+    const lms = lms1.map((v, i) => v * (1 - t) + lms2[i] * t);
+
+    // Apply gain in the middle
+    const gain = 1.0 + 0.2 * t * (1.0 - t);
+    const lmsGained = lms.map(v => v * gain);
+
+    // Convert back to RGB space
+    const rgb = multiplyMatrixVector(LMS_TO_CONE, lmsGained.map(v => v * v * v));
+
+    // Convert back to 0-255 range and create new Color object
+    const result = {
+        rgb: {
+            r: Math.round(Math.max(0, Math.min(255, rgb[0] * 255))),
+            g: Math.round(Math.max(0, Math.min(255, rgb[1] * 255))),
+            b: Math.round(Math.max(0, Math.min(255, rgb[2] * 255)))
+        }
+    };
+
+    // Create and return final color (using createColor to ensure proper format)
+    const chromaColor = chroma.rgb(result.rgb.r, result.rgb.g, result.rgb.b);
+    const [h, s, l] = chromaColor.hsl();
+    return createColor(h, s * 100, l * 100);
+}
