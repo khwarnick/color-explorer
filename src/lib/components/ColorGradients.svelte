@@ -10,7 +10,7 @@
     export let hslGradientColors: Color[] = [];
     export let evenLumGradientColors: Color[] = [];
     export let oklabGradientColors: Color[] = [];
-    export let oklabGainGradientColors: Color[] = [];
+    export let oklabChromaGradientColors: Color[] = [];
     export let rgbGradientColors: Color[] = [];
 
     const dispatch = createEventDispatcher();
@@ -22,14 +22,14 @@
     $: hslGradientSteps = generateHSLGradient(startColor, endColor);
     $: evenLumGradientSteps = generateEvenLumGradient(startColor, endColor);
     $: oklabGradientSteps = generateOklabGradient(startColor, endColor, false);
-    $: oklabGainGradientSteps = generateOklabGradient(startColor, endColor, true);
+    $: oklabChromaGradientSteps = generateOklabChromaGradient(startColor, endColor);
     $: rgbGradientSteps = generateRGBGradient(startColor, endColor);
 
     // Update exported gradient colors
     $: hslGradientColors = hslGradientSteps;
     $: evenLumGradientColors = evenLumGradientSteps;
     $: oklabGradientColors = oklabGradientSteps;
-    $: oklabGainGradientColors = oklabGainGradientSteps;
+    $: oklabChromaGradientColors = oklabChromaGradientSteps;
     $: rgbGradientColors = rgbGradientSteps;
 
     $: isStartColorActive = activeColor && startColor && activeColor.h === startColor.h && 
@@ -193,6 +193,25 @@
         colors.push(end); // End with exact end color
         return colors;
     }
+
+    function generateOklabChromaGradient(start: Color | null, end: Color | null): Color[] {
+        if (!start || !end) return [];
+        
+        const steps = 20;
+        const colors: Color[] = [];
+        
+        const startChroma = chroma.rgb(start.rgb.r, start.rgb.g, start.rgb.b);
+        const endChroma = chroma.rgb(end.rgb.r, end.rgb.g, end.rgb.b);
+        
+        for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const mixed = chroma.mix(startChroma, endChroma, t, 'oklab');
+            const [h, s, l] = mixed.hsl();
+            colors.push(createColor(h || 0, (s || 0) * 100, (l || 0) * 100));
+        }
+        
+        return colors;
+    }
 </script>
 
 <div class="gradients-panel">
@@ -255,9 +274,9 @@
             </div>
 
             <div class="gradient-bar">
-                <span class="label">Oklab gain ◆</span>
+                <span class="label" title="Interpolate with chroma.js's built-in Oklab interpolation">Oklab-chroma ◆</span>
                 <div class="bar">
-                    {#each oklabGainGradientSteps as color}
+                    {#each oklabChromaGradientSteps as color}
                         <div 
                             class="step"
                             style="background-color: rgb({color.rgb.r}, {color.rgb.g}, {color.rgb.b})"

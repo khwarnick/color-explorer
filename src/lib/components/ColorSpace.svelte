@@ -17,7 +17,7 @@
     export let hslGradientColors: Color[] = [];  // Add gradient colors
     export let evenLumGradientColors: Color[] = [];
     export let oklabGradientColors: Color[] = [];
-    export let oklabGainGradientColors: Color[] = [];
+    export let oklabChromaGradientColors: Color[] = [];
     export let rgbGradientColors: Color[] = [];
 
     const colorSpaceMode = writable<'saturation' | 'chroma'>('saturation');
@@ -678,7 +678,7 @@
             scene.add(point);
         });
 
-        oklabGainGradientColors.forEach(color => {
+        oklabChromaGradientColors.forEach(color => {
             const position = colorToPosition(color, $colorSpaceMode);
             const point = createGradientPoint(color, position, 'diamond');
             point.name = 'gradientPoint';
@@ -741,7 +741,7 @@
     // Update when gradient colors change
     $: if (scene && (rgbGradientColors.length > 0 || hslGradientColors.length > 0 || 
                     evenLumGradientColors.length > 0 || oklabGradientColors.length > 0 || 
-                    oklabGainGradientColors.length > 0)) {
+                    oklabChromaGradientColors.length > 0)) {
         updateColorPoints();
     }
 
