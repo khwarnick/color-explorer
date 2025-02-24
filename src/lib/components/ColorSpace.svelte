@@ -17,6 +17,8 @@
     export let hslGradientColors: Color[] = [];  // Add gradient colors
     export let evenLumGradientColors: Color[] = [];
     export let oklabGradientColors: Color[] = [];
+    export let oklabGainGradientColors: Color[] = [];
+    export let rgbGradientColors: Color[] = [];
 
     const colorSpaceMode = writable<'saturation' | 'chroma'>('saturation');
     let showEqualLuminance = false;
@@ -425,7 +427,7 @@
         return sprite;
     }
 
-    function createGradientPoint(color: Color, position: THREE.Vector3, shape: 'sphere' | 'box' | 'cone'): THREE.Mesh {
+    function createGradientPoint(color: Color, position: THREE.Vector3, shape: 'sphere' | 'box' | 'cone' | 'diamond' | 'pentagon'): THREE.Mesh {
         let geometry;
         
         switch (shape) {
@@ -437,6 +439,12 @@
                 break;
             case 'cone':
                 geometry = new THREE.ConeGeometry(0.02, 0.04, 8);
+                break;
+            case 'diamond':
+                geometry = new THREE.OctahedronGeometry(0.025);
+                break;
+            case 'pentagon':
+                geometry = new THREE.CylinderGeometry(0.025, 0.025, 0.015, 6);  // Changed from 5 to 6 sides
                 break;
         }
 
@@ -453,6 +461,8 @@
         
         if (shape === 'cone') {
             point.rotation.x = Math.PI;  // Point the cone downward
+        } else if (shape === 'pentagon') {
+            point.rotation.x = Math.PI / 2;  // Lay the pentagon flat
         }
         
         return point;
@@ -640,6 +650,13 @@
         }
 
         // Add gradient points with different shapes
+        rgbGradientColors.forEach(color => {
+            const position = colorToPosition(color, $colorSpaceMode);
+            const point = createGradientPoint(color, position, 'pentagon');
+            point.name = 'gradientPoint';
+            scene.add(point);
+        });
+
         hslGradientColors.forEach(color => {
             const position = colorToPosition(color, $colorSpaceMode);
             const point = createGradientPoint(color, position, 'sphere');
@@ -657,6 +674,13 @@
         oklabGradientColors.forEach(color => {
             const position = colorToPosition(color, $colorSpaceMode);
             const point = createGradientPoint(color, position, 'cone');
+            point.name = 'gradientPoint';
+            scene.add(point);
+        });
+
+        oklabGainGradientColors.forEach(color => {
+            const position = colorToPosition(color, $colorSpaceMode);
+            const point = createGradientPoint(color, position, 'diamond');
             point.name = 'gradientPoint';
             scene.add(point);
         });
@@ -715,7 +739,9 @@
     }
 
     // Update when gradient colors change
-    $: if (scene && (hslGradientColors.length > 0 || evenLumGradientColors.length > 0 || oklabGradientColors.length > 0)) {
+    $: if (scene && (rgbGradientColors.length > 0 || hslGradientColors.length > 0 || 
+                    evenLumGradientColors.length > 0 || oklabGradientColors.length > 0 || 
+                    oklabGainGradientColors.length > 0)) {
         updateColorPoints();
     }
 

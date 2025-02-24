@@ -169,7 +169,7 @@ function multiplyMatrixVector(matrix: number[][], vector: number[]): number[] {
     );
 }
 
-export function oklabMix(color1: Color, color2: Color, t: number): Color {
+export function oklabMix(color1: Color, color2: Color, t: number, applyGain: boolean = false): Color {
     // Convert RGB values to linear space (0-1)
     const lin1 = [color1.rgb.r / 255, color1.rgb.g / 255, color1.rgb.b / 255];
     const lin2 = [color2.rgb.r / 255, color2.rgb.g / 255, color2.rgb.b / 255];
@@ -194,7 +194,7 @@ export function oklabMix(color1: Color, color2: Color, t: number): Color {
     const lms = lms1.map((v, i) => v * (1 - t) + lms2[i] * t);
 
     // Apply gain in the middle
-    const gain = 1.0 + 0.2 * t * (1.0 - t);
+    const gain = applyGain ? 1.0 + 0.2 * t * (1.0 - t) : 1.0;
     const lmsGained = lms.map(v => v * gain);
 
     // Convert back to RGB space

@@ -27,6 +27,8 @@
   const hslGradientColors = writable<Color[]>([]);
   const evenLumGradientColors = writable<Color[]>([]);
   const oklabGradientColors = writable<Color[]>([]);
+  const oklabGainGradientColors = writable<Color[]>([]);
+  const rgbGradientColors = writable<Color[]>([]);
 
   // Computed stores based on active tab
   $: colors = activeTab === 'hsl' ? hslColors : oklabColors;
@@ -146,9 +148,11 @@
             activeColor={oklabActiveColor} 
             lockedColors={oklabLockedColors}
             showEqualLuminancePlot={false}
+            rgbGradientColors={$rgbGradientColors}
             hslGradientColors={$hslGradientColors}
             evenLumGradientColors={$evenLumGradientColors}
             oklabGradientColors={$oklabGradientColors}
+            oklabGainGradientColors={$oklabGainGradientColors}
           />
         </div>
         <div class="controls">
@@ -159,9 +163,11 @@
                 endColor={$oklabEndColor}
                 activeColor={$oklabActiveColor}
                 on:colorSelected={handleGradientColorSelected}
+                bind:rgbGradientColors={$rgbGradientColors}
                 bind:hslGradientColors={$hslGradientColors}
                 bind:evenLumGradientColors={$evenLumGradientColors}
                 bind:oklabGradientColors={$oklabGradientColors}
+                bind:oklabGainGradientColors={$oklabGainGradientColors}
               />
             </div>
             <div class="control-panel">

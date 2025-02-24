@@ -10,6 +10,8 @@
     export let hslGradientColors: Color[] = [];
     export let evenLumGradientColors: Color[] = [];
     export let oklabGradientColors: Color[] = [];
+    export let oklabGainGradientColors: Color[] = [];
+    export let rgbGradientColors: Color[] = [];
 
     const dispatch = createEventDispatcher();
 
@@ -19,12 +21,16 @@
 
     $: hslGradientSteps = generateHSLGradient(startColor, endColor);
     $: evenLumGradientSteps = generateEvenLumGradient(startColor, endColor);
-    $: oklabGradientSteps = generateOKLabGradient(startColor, endColor);
+    $: oklabGradientSteps = generateOklabGradient(startColor, endColor, false);
+    $: oklabGainGradientSteps = generateOklabGradient(startColor, endColor, true);
+    $: rgbGradientSteps = generateRGBGradient(startColor, endColor);
 
     // Update exported gradient colors
     $: hslGradientColors = hslGradientSteps;
     $: evenLumGradientColors = evenLumGradientSteps;
     $: oklabGradientColors = oklabGradientSteps;
+    $: oklabGainGradientColors = oklabGainGradientSteps;
+    $: rgbGradientColors = rgbGradientSteps;
 
     $: isStartColorActive = activeColor && startColor && activeColor.h === startColor.h && 
                            activeColor.s === startColor.s && activeColor.l === startColor.l;
@@ -37,18 +43,41 @@
         const steps = 20;
         const colors: Color[] = [start]; // Start with exact start color
         
-        // Calculate shortest path for hue interpolation
-        let startHue = start.h;
-        let endHue = end.h;
-        let hueDiff = ((endHue - startHue + 540) % 360) - 180; // Ensure shortest path
+        // Convert start and end colors to XYZ coordinates
+        const startAngle = (start.h * Math.PI) / 180;
+        const endAngle = (end.h * Math.PI) / 180;
+        const startRadius = start.s / 100;
+        const endRadius = end.s / 100;
+        const startHeight = (start.l / 50) - 1;
+        const endHeight = (end.l / 50) - 1;
         
-        // Generate intermediate steps
+        const startX = startRadius * Math.cos(startAngle);
+        const startZ = startRadius * Math.sin(startAngle);
+        const startY = startHeight;
+        
+        const endX = endRadius * Math.cos(endAngle);
+        const endZ = endRadius * Math.sin(endAngle);
+        const endY = endHeight;
+        
+        // Generate intermediate steps by interpolating in XYZ space
         for (let i = 1; i < steps; i++) {
             const t = i / steps;
-            // Interpolate hue along shortest path
-            const h = (startHue + hueDiff * t + 360) % 360;
-            const s = start.s + t * (end.s - start.s);
-            const l = start.l + t * (end.l - start.l);
+            
+            // Linear interpolation in XYZ
+            const x = startX + t * (endX - startX);
+            const y = startY + t * (endY - startY);
+            const z = startZ + t * (endZ - startZ);
+            
+            // Convert back to HSL
+            const radius = Math.sqrt(x * x + z * z);
+            const angle = Math.atan2(z, x);
+            
+            // Convert to HSL values
+            let h = (angle * 180) / Math.PI;
+            if (h < 0) h += 360;  // Ensure positive hue
+            const s = radius * 100;
+            const l = (y + 1) * 50;
+            
             colors.push(createColor(h, s, l));
         }
         
@@ -62,19 +91,43 @@
         const steps = 20;
         const colors: Color[] = [start]; // Start with exact start color
         
-        // Calculate shortest path for hue interpolation
-        let startHue = start.h;
-        let endHue = end.h;
-        let hueDiff = ((endHue - startHue + 540) % 360) - 180; // Ensure shortest path
+        // Convert start and end colors to XYZ coordinates (same as HSL-lin)
+        const startAngle = (start.h * Math.PI) / 180;
+        const endAngle = (end.h * Math.PI) / 180;
+        const startRadius = start.s / 100;
+        const endRadius = end.s / 100;
+        const startHeight = (start.l / 50) - 1;
+        const endHeight = (end.l / 50) - 1;
+        
+        const startX = startRadius * Math.cos(startAngle);
+        const startZ = startRadius * Math.sin(startAngle);
+        const startY = startHeight;
+        
+        const endX = endRadius * Math.cos(endAngle);
+        const endZ = endRadius * Math.sin(endAngle);
+        const endY = endHeight;
         
         // Generate intermediate steps
         for (let i = 1; i < steps; i++) {
             const t = i / steps;
-            const targetLum = start.luminance + t * (end.luminance - start.luminance);
             
-            // Interpolate hue and saturation linearly
-            const h = (startHue + hueDiff * t + 360) % 360;
-            const s = start.s + t * (end.s - start.s);
+            // Linear interpolation in XYZ
+            const x = startX + t * (endX - startX);
+            const y = startY + t * (endY - startY);
+            const z = startZ + t * (endZ - startZ);
+            
+            // Convert back to HSL
+            const radius = Math.sqrt(x * x + z * z);
+            const angle = Math.atan2(z, x);
+            
+            // Convert to HSL values
+            let h = (angle * 180) / Math.PI;
+            if (h < 0) h += 360;  // Ensure positive hue
+            const s = radius * 100;
+            
+            // Instead of using the interpolated y for lightness,
+            // find a lightness that gives us the desired luminance
+            const targetLum = start.luminance + t * (end.luminance - start.luminance);
             
             // Search for lightness value that gives target luminance
             let bestLight = 50;
@@ -104,7 +157,7 @@
         return colors;
     }
 
-    function generateOKLabGradient(start: Color | null, end: Color | null): Color[] {
+    function generateOklabGradient(start: Color | null, end: Color | null, applyGain: boolean): Color[] {
         if (!start || !end) return [];
         
         const steps = 20;
@@ -112,9 +165,32 @@
         
         for (let i = 0; i <= steps; i++) {
             const t = i / steps;
-            colors.push(oklabMix(start, end, t));
+            colors.push(oklabMix(start, end, t, applyGain));
         }
         
+        return colors;
+    }
+
+    function generateRGBGradient(start: Color | null, end: Color | null): Color[] {
+        if (!start || !end) return [];
+        
+        const steps = 20;
+        const colors: Color[] = [start]; // Start with exact start color
+        
+        // Generate intermediate steps with linear RGB interpolation
+        for (let i = 1; i < steps; i++) {
+            const t = i / steps;
+            const r = Math.round(start.rgb.r + t * (end.rgb.r - start.rgb.r));
+            const g = Math.round(start.rgb.g + t * (end.rgb.g - start.rgb.g));
+            const b = Math.round(start.rgb.b + t * (end.rgb.b - start.rgb.b));
+            
+            // Convert RGB back to HSL using chroma-js
+            const chromaColor = chroma.rgb(r, g, b);
+            const [h, s, l] = chromaColor.hsl();
+            colors.push(createColor(h || 0, (s || 0) * 100, (l || 0) * 100));
+        }
+        
+        colors.push(end); // End with exact end color
         return colors;
     }
 </script>
@@ -131,7 +207,19 @@
         
         <div class="gradient-bars">
             <div class="gradient-bar">
-                <span class="label">HSL ●</span>
+                <span class="label">RGB ⬢</span>
+                <div class="bar">
+                    {#each rgbGradientSteps as color}
+                        <div 
+                            class="step"
+                            style="background-color: rgb({color.rgb.r}, {color.rgb.g}, {color.rgb.b})"
+                        />
+                    {/each}
+                </div>
+            </div>
+            
+            <div class="gradient-bar">
+                <span class="label">HSL-lin ●</span>
                 <div class="bar">
                     {#each hslGradientSteps as color}
                         <div 
@@ -143,7 +231,7 @@
             </div>
             
             <div class="gradient-bar">
-                <span class="label">Even Luminance ■</span>
+                <span class="label">HSL-lin-lum ■</span>
                 <div class="bar">
                     {#each evenLumGradientSteps as color}
                         <div 
@@ -155,9 +243,21 @@
             </div>
             
             <div class="gradient-bar">
-                <span class="label">OKLab ▲</span>
+                <span class="label">Oklab ▲</span>
                 <div class="bar">
                     {#each oklabGradientSteps as color}
+                        <div 
+                            class="step"
+                            style="background-color: rgb({color.rgb.r}, {color.rgb.g}, {color.rgb.b})"
+                        />
+                    {/each}
+                </div>
+            </div>
+
+            <div class="gradient-bar">
+                <span class="label">Oklab gain ◆</span>
+                <div class="bar">
+                    {#each oklabGainGradientSteps as color}
                         <div 
                             class="step"
                             style="background-color: rgb({color.rgb.r}, {color.rgb.g}, {color.rgb.b})"
